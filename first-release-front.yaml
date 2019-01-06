@@ -1,0 +1,65 @@
+---
+# Source: vote-front/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-front
+  labels:
+    app.kubernetes.io/name: vote-front
+    helm.sh/chart: vote-front-0.1.0
+    app.kubernetes.io/instance: first-release-front
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: vote-front
+    app.kubernetes.io/instance: first-release-front
+
+---
+# Source: vote-front/templates/deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: voting-front
+  labels:
+    app.kubernetes.io/name: vote-front
+    helm.sh/chart: vote-front-0.1.0
+    app.kubernetes.io/instance: first-release-front
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vote-front
+      app.kubernetes.io/instance: first-release-front
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vote-front
+        app.kubernetes.io/instance: first-release-front
+    spec:
+      containers:
+        - name: vote-front
+          image: "enabledocker/voting_front:1.0"
+          imagePullPolicy: Always
+          env:
+          - name: VOTE_SERVICE
+            value: 'voting-vote'
+          - name: VOTE_PORT
+            value: '3000'
+          ports:
+          - containerPort: 80
+      imagePullSecrets:
+        - name: master-voting-front
+
+---
+# Source: vote-front/templates/cert.yaml
+
+---
+# Source: vote-front/templates/ing.yaml
+
+

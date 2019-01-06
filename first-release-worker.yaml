@@ -1,0 +1,62 @@
+---
+# Source: voting-worker/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-worker
+  labels:
+    app.kubernetes.io/name: voting-worker
+    helm.sh/chart: voting-worker-0.1.0
+    app.kubernetes.io/instance: first-release-master
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  type: ClusterIP
+  ports:
+    - port: 20020
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: voting-worker
+    app.kubernetes.io/instance: first-release-master
+
+---
+# Source: voting-worker/templates/deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: voting-worker
+  labels:
+    app.kubernetes.io/name: voting-worker
+    helm.sh/chart: voting-worker-0.1.0
+    app.kubernetes.io/instance: first-release-master
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-worker
+      app.kubernetes.io/instance: first-release-master
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-worker
+        app.kubernetes.io/instance: first-release-master
+    spec:
+      containers:
+        - name: voting-worker
+          image: "enabledocker/voting_worker:1.0"
+          imagePullPolicy: Always
+          env:
+          - name: DATABASE_HOST
+            value: 'voting-requirements-database'
+          - name: DATABASE_PORT
+            value: '27017'
+          - name: DATABASE_NAME
+            value: 'voting'
+          - name: QUEUE_HOST
+            value: 'voting-requirements-queue'
+          - name: QUEUE_PORT
+            value: '6379'
+      imagePullSecrets:
+        - name: master-voting-worker

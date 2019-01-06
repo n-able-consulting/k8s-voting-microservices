@@ -1,0 +1,475 @@
+---
+# Source: voting-requirements/templates/database-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-requirements-database
+  labels:
+    app.kubernetes.io/name: voting-requirements-db
+    helm.sh/chart: voting-requirements-0.1.0
+    app.kubernetes.io/instance: first-release-requirements
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  type: ClusterIP
+  ports:
+    - port: 27017
+      targetPort: 27017
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: voting-requirements-db
+    app.kubernetes.io/instance: first-release-requirements
+    app.kubernetes.io/app: database
+    app.kubernetes.io/brand: mongodb
+
+---
+# Source: voting-requirements/templates/queue-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-requirements-queue
+  labels:
+    app.kubernetes.io/name: voting-requirements-queue
+    helm.sh/chart: voting-requirements-0.1.0
+    app.kubernetes.io/instance: first-release-requirements
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: voting-requirements-queue
+    app.kubernetes.io/instance: first-release-requirements
+    app.kubernetes.io/app: queue
+    app.kubernetes.io/brand: redis
+
+---
+# Source: voting-requirements/templates/database-deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: voting-requirements-database
+  labels:
+    app.kubernetes.io/name: voting-requirements-db
+    helm.sh/chart: voting-requirements-0.1.0
+    app.kubernetes.io/instance: first-release-requirements
+    app.kubernetes.io/managed-by: Tiller
+    app.kubernetes.io/app: database
+    app.kubernetes.io/brand: mongodb
+spec:
+  replicas:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-requirements-db
+      app.kubernetes.io/instance: first-release-requirements
+      app.kubernetes.io/app: database
+      app.kubernetes.io/brand: mongodb
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-requirements-db
+        app.kubernetes.io/instance: first-release-requirements
+        app.kubernetes.io/app: database
+        app.kubernetes.io/brand: mongodb
+    spec:
+      containers:
+        - name: voting-requirements
+          image: "mongo:3.4"
+          imagePullPolicy: IfNotPresent
+          ports:
+          -  containerPort: 27017
+          livenessProbe:
+            exec:
+              command:
+                - mongo
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+            periodSeconds: 10
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - mongo
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 3
+            periodSeconds: 10
+            successThreshold: 1
+          resources:
+            {}
+---
+# Source: voting-requirements/templates/queue-deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: voting-requirements-queue
+  labels:
+    app.kubernetes.io/name: voting-requirements-queue
+    helm.sh/chart: voting-requirements-0.1.0
+    app.kubernetes.io/instance: first-release-requirements
+    app.kubernetes.io/managed-by: Tiller
+    app.kubernetes.io/app: queue
+    app.kubernetes.io/brand: redis
+spec:
+  replicas:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-requirements-queue
+      app.kubernetes.io/instance: first-release-requirements
+      app.kubernetes.io/app: queue
+      app.kubernetes.io/brand: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-requirements-queue
+        app.kubernetes.io/instance: first-release-requirements
+        app.kubernetes.io/app: queue
+        app.kubernetes.io/brand: redis
+    spec:
+      containers:
+        - name: voting-requirements-queue
+          image: "redis:3.2"
+          imagePullPolicy: IfNotPresent
+          ports:
+          -  containerPort: 6379
+          livenessProbe:
+            exec:
+              command:
+              - sh
+              - -c
+              - '[ $(redis-cli ping) = PONG ]'
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+              - sh
+              - -c
+              - '[ $(redis-cli ping) = PONG ]'
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 5
+          resources:
+            {}
+---
+# Source: voting-worker/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-worker
+  labels:
+    app.kubernetes.io/name: voting-worker
+    helm.sh/chart: voting-worker-0.1.0
+    app.kubernetes.io/instance: first-release-master
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  type: ClusterIP
+  ports:
+    - port: 20020
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: voting-worker
+    app.kubernetes.io/instance: first-release-master
+---
+# Source: voting-worker/templates/deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: voting-worker
+  labels:
+    app.kubernetes.io/name: voting-worker
+    helm.sh/chart: voting-worker-0.1.0
+    app.kubernetes.io/instance: first-release-master
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-worker
+      app.kubernetes.io/instance: first-release-master
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-worker
+        app.kubernetes.io/instance: first-release-master
+    spec:
+      containers:
+        - name: voting-worker
+          image: "enabledocker/voting_worker:1.0"
+          imagePullPolicy: Always
+          env:
+          - name: DATABASE_HOST
+            value: 'voting-requirements-database'
+          - name: DATABASE_PORT
+            value: '27017'
+          - name: DATABASE_NAME
+            value: 'voting'
+          - name: QUEUE_HOST
+            value: 'voting-requirements-queue'
+          - name: QUEUE_PORT
+            value: '6379'
+      imagePullSecrets:
+        - name: master-voting-worker
+---
+# Source: voting-reports/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-reports
+  labels:
+    app.kubernetes.io/name: voting-reports
+    helm.sh/chart: voting-reports-0.1.0
+    app.kubernetes.io/instance: first-release-reports
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: voting-reports
+    app.kubernetes.io/instance: first-release-reports
+---
+# Source: voting-reports/templates/deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: voting-reports
+  labels:
+    app.kubernetes.io/name: voting-reports
+    helm.sh/chart: voting-reports-0.1.0
+    app.kubernetes.io/instance: first-release-reports
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-reports
+      app.kubernetes.io/instance: first-release-reports
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-reports
+        app.kubernetes.io/instance: first-release-reports
+    spec:
+      containers:
+        - name: voting-reports
+          image: "enabledocker/voting_reports:1.0"
+          imagePullPolicy: Always
+          env:
+          - name: DATABASE_HOST
+            value: 'voting-requirements-database'
+          - name: DATABASE_PORT
+            value: '27017'
+          - name: DATABASE_NAME
+            value: 'voting'
+          - name: REPORTER_SERVICE
+            value: 'voting-reports'
+          ports:
+          - containerPort: 3000
+          name: wordpress
+      imagePullSecrets:
+        - name: master-voting-reports
+---
+# Source: voting-votes/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-votes
+  labels:
+    app.kubernetes.io/name: voting-votes
+    helm.sh/chart: voting-votes-0.1.0
+    app.kubernetes.io/instance: first-release-votes
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: voting-votes
+    app.kubernetes.io/instance: first-release-votes
+---
+# Source: voting-votes/templates/deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: voting-votes
+  labels:
+    app.kubernetes.io/name: voting-votes
+    helm.sh/chart: voting-votes-0.1.0
+    app.kubernetes.io/instance: first-release-votes
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-votes
+      app.kubernetes.io/instance: first-release-votes
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-votes
+        app.kubernetes.io/instance: first-release-votes
+    spec:
+      containers:
+        - name: voting-votes
+          image: "enabledocker/voting_votes:1.0"
+          imagePullPolicy: Always
+          env:
+          - name: DATABASE_HOST
+            value: 'voting-requirements-database'
+          - name: DATABASE_PORT
+            value: '27017'
+          - name: DATABASE_NAME
+            value: 'voting'
+          - name: QUEUE_HOST
+            value: 'voting-requirements-queue'
+          - name: QUEUE_PORT
+            value: '6379'
+          - name: REPORTS_SERVICE
+            value: 'voting-reports'
+          - name: REPORTS_PORT
+            value: '3000'
+          ports:
+          - containerPort: 3000
+      imagePullSecrets:
+        - name: master-voting-votes
+---
+# Source: voting-vote/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-vote
+  labels:
+    app.kubernetes.io/name: voting-vote
+    helm.sh/chart: voting-vote-0.1.0
+    app.kubernetes.io/instance: first-release-vote
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  type: NodePort
+  ports:
+    - port: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: voting-vote
+    app.kubernetes.io/instance: first-release-vote
+---
+# Source: voting-vote/templates/deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: voting-vote
+  labels:
+    app.kubernetes.io/name: voting-vote
+    helm.sh/chart: voting-vote-0.1.0
+    app.kubernetes.io/instance: first-release-vote
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-vote
+      app.kubernetes.io/instance: first-release-vote
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-vote
+        app.kubernetes.io/instance: first-release-vote
+    spec:
+      containers:
+        - name: voting-vote
+          image: "enabledocker/voting_vote:1.0"
+          imagePullPolicy: Always
+          env:
+          - name: DATABASE_HOST
+            value: 'voting-requirements-database'
+          - name: DATABASE_PORT
+            value: '27017'
+          - name: DATABASE_NAME
+            value: 'voting'
+          - name: QUEUE_HOST
+            value: 'voting-requirements-queue'
+          - name: QUEUE_PORT
+            value: '6379'
+          - name: REPORTS_SERVICE
+            value: 'voting-reports'
+          - name: REPORTS_PORT
+            value: '3000'
+          - name: VOTING_SERVICE
+            value: 'voting-votes'
+          - name: VOTING_PORT
+            value: '3000'
+          - name: VOTE_SERVICE
+            value: 'voting-vote'
+          - name: VOTE_PORT
+            value: '3000'
+          ports:
+          - containerPort: 3000
+      imagePullSecrets:
+        - name: master-voting-vote
+---
+# Source: vote-front/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-front
+  labels:
+    app.kubernetes.io/name: vote-front
+    helm.sh/chart: vote-front-0.1.0
+    app.kubernetes.io/instance: first-release-front
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: vote-front
+    app.kubernetes.io/instance: first-release-front
+---
+# Source: vote-front/templates/deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: voting-front
+  labels:
+    app.kubernetes.io/name: vote-front
+    helm.sh/chart: vote-front-0.1.0
+    app.kubernetes.io/instance: first-release-front
+    app.kubernetes.io/managed-by: Tiller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vote-front
+      app.kubernetes.io/instance: first-release-front
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vote-front
+        app.kubernetes.io/instance: first-release-front
+    spec:
+      containers:
+        - name: vote-front
+          image: "enabledocker/voting_front:1.0"
+          imagePullPolicy: Always
+          env:
+          - name: VOTE_SERVICE
+            value: 'voting-vote'
+          - name: VOTE_PORT
+            value: '3000'
+          ports:
+          - containerPort: 80
+      imagePullSecrets:
+        - name: master-voting-front
